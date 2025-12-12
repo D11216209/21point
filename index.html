@@ -321,8 +321,9 @@
                 cardDiv.className = 'card';
                 
                 if (hideFirst && index === 0) {
-                    cardDiv.textContent = '🂠';
+                    cardDiv.textContent = '?';
                     cardDiv.className = 'card hidden';
+                    cardDiv.setAttribute('aria-label', '隱藏的牌');
                 } else {
                     cardDiv.textContent = card.display;
                     if (card.suit === 'hearts' || card.suit === 'diamonds') {
@@ -349,9 +350,9 @@
             renderHand(dealerHand, 'dealer-cards', hideDealer);
             
             if (hideDealer && dealerHand.length > 0) {
-                // 只顯示明牌的點數
-                const visibleTotal = dealerHand.slice(1).reduce((sum, card) => 
-                    sum + getCardValue(card.rank), 0);
+                // 只顯示明牌的點數（使用相同的計算邏輯處理 Ace）
+                const visibleCards = dealerHand.slice(1);
+                const visibleTotal = calculateHandTotal(visibleCards);
                 document.getElementById('dealer-total').textContent = `點數：? (明牌 ${visibleTotal})`;
             } else if (dealerHand.length > 0) {
                 const dealerTotal = calculateHandTotal(dealerHand);
@@ -449,34 +450,40 @@
         function dealerPlay() {
             render(); // 先顯示莊家的完整手牌
 
-            const dealerTotal = calculateHandTotal(gameState.dealerHand);
+            let dealerTotal = calculateHandTotal(gameState.dealerHand);
             
-            if (dealerTotal < 17) {
+            // 使用迭代方式而非遞迴，避免潛在的堆疊溢位
+            function drawNextCard() {
+                if (dealerTotal >= 17) {
+                    // 莊家停止抽牌，進入結算
+                    setTimeout(() => {
+                        resolveResult();
+                    }, 800);
+                    return;
+                }
+                
                 // 莊家需要抽牌
                 setTimeout(() => {
                     const card = drawCard(gameState.deck);
                     gameState.dealerHand.push(card);
                     setMessage(`莊家抽到了 ${card.display}。`);
                     
-                    const newTotal = calculateHandTotal(gameState.dealerHand);
-                    if (newTotal > 21) {
+                    dealerTotal = calculateHandTotal(gameState.dealerHand);
+                    if (dealerTotal > 21) {
                         setTimeout(() => {
-                            setMessage(`莊家爆牌了！（${newTotal} 點）你贏了！`);
+                            setMessage(`莊家爆牌了！（${dealerTotal} 點）你贏了！`);
                             gameState.phase = 'result';
                             gameState.result = 'player_win';
                             render();
                         }, 800);
                     } else {
                         render();
-                        dealerPlay(); // 遞迴繼續抽牌
+                        drawNextCard(); // 繼續抽牌
                     }
                 }, 1000);
-            } else {
-                // 莊家停止抽牌，進入結算
-                setTimeout(() => {
-                    resolveResult();
-                }, 800);
             }
+            
+            drawNextCard();
         }
 
         function resolveResult() {
